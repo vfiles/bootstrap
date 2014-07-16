@@ -41,7 +41,14 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
       //SUPPORTED ATTRIBUTES (OPTIONS)
 
       //minimal no of characters that needs to be entered before typeahead kicks-in
-      var minSearch = originalScope.$eval(attrs.typeaheadMinLength) || 1;
+      var minSearch = originalScope.$eval(attrs.typeaheadMinLength)
+      if (!angular.isNumber(minSearch)) {
+        minSearch = 1;
+      } else if (minSearch === 0) {
+        element.focus(function(){
+          matchParser(modelCtrl.$viewValue);
+        });
+      }
 
       //minimal wait time after last character typed before typehead kicks-in
       var waitTime = originalScope.$eval(attrs.typeaheadWaitMs) || 0;
@@ -59,10 +66,56 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
       var appendToBody =  attrs.typeaheadAppendToBody ? $parse(attrs.typeaheadAppendToBody) : false;
 
+      var tokenPattern = attrs.typeaheadTokenPattern ? new RegExp(attrs.typeaheadTokenPattern, "g") : undefined;
+
       //INTERNAL VARIABLES
 
       //model setter executed upon match selection
       var $setModelValue = $parse(attrs.ngModel).assign;
+
+      //tokenizer stuff for multi-select
+      var getTokens = function(str) {
+        var matches = [];
+        var match;
+        while (match = tokenPattern.exec(str)) {
+          matches.push(match);
+        }
+        return matches;
+      }
+      var getCursorPosition = function(elem) {
+        var el = elem.get(0);
+        var pos = 0;
+        if('selectionStart' in el) {
+          pos = el.selectionStart;
+        } else if('selection' in document) {
+          el.focus();
+          var Sel = document.selection.createRange();
+          var SelLength = document.selection.createRange().text.length;
+          Sel.moveStart('character', -el.value.length);
+          pos = Sel.text.length - SelLength;
+        }
+        return pos;
+      }
+      var getCurrentToken = function(inputValue) {
+        if (!tokenPattern) return;
+
+        var cursorIdx = getCursorPosition(element);
+        var matches = getTokens(inputValue);
+        for (var i = 0; i < matches.length; i++) {
+          var match = matches[i];
+          if (match.index <= cursorIdx && match.index + match[0].length >= cursorIdx) {
+            return match;
+          } else if (match.index > cursorIdx) {
+            return;
+          }
+        }
+      }
+      var setCurrentToken = function(inputValue, newToken) {
+        if (!tokenPattern) return;
+
+        var currentToken = getCurrentToken(inputValue)
+        return inputValue.substr(0, currentToken.index).concat(currentToken[0].replace(currentToken[1], newToken)).concat(inputValue.substr(currentToken.index + currentToken[0].length));
+      }
 
       //expressions used by typeahead
       var parserResult = typeaheadParser.parse(attrs.typeahead);
@@ -97,7 +150,12 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
       var getMatchesAsync = function(inputValue) {
 
-        var locals = {$viewValue: inputValue};
+        var locals = {$viewValue: inputValue}, currentToken;
+        if (tokenPattern && (currentToken = getCurrentToken(inputValue))) {
+          locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
+        } else {
+          locals.$tokenValue = '';
+        }
         isLoadingSetter(originalScope, true);
         $q.when(parserResult.source(originalScope, locals)).then(function(matches) {
 
@@ -141,16 +199,11 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
       //we need to propagate user's query so we can higlight matches
       scope.query = undefined;
 
-      //Declare the timeout promise var outside the function scope so that stacked calls can be cancelled later 
+      //Declare the timeout promise var outside the function scope so that stacked calls can be cancelled later
       var timeoutPromise;
 
-      //plug into $parsers pipeline to open a typeahead on view changes initiated from DOM
-      //$parsers kick-in on all the changes coming from the view as well as manually triggered by $setViewValue
-      modelCtrl.$parsers.unshift(function (inputValue) {
-
-        hasFocus = true;
-
-        if (inputValue && inputValue.length >= minSearch) {
+      var maybeGetMatchesAsync = function (inputValue) {
+        if ((inputValue||'').length >= minSearch) {
           if (waitTime > 0) {
             if (timeoutPromise) {
               $timeout.cancel(timeoutPromise);//cancel previous timeout
@@ -165,6 +218,14 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
           isLoadingSetter(originalScope, false);
           resetMatches();
         }
+      };
+
+      var matchParser = function (inputValue) {
+
+        hasFocus = true;
+
+        maybeGetMatchesAsync(inputValue);
+
 
         if (isEditable) {
           return inputValue;
@@ -178,7 +239,11 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
             return undefined;
           }
         }
-      });
+      };
+
+      //plug into $parsers pipeline to open a typeahead on view changes initiated from DOM
+      //$parsers kick-in on all the changes coming from the view as well as manually triggered by $setViewValue
+      modelCtrl.$parsers.unshift(matchParser);
 
       modelCtrl.$formatters.push(function (modelValue) {
 
@@ -210,6 +275,9 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
         locals[parserResult.itemName] = item = scope.matches[activeIdx].model;
         model = parserResult.modelMapper(originalScope, locals);
+        if (tokenPattern) {
+          model = setCurrentToken(modelCtrl.$viewValue, model);
+        }
         $setModelValue(originalScope, model);
         modelCtrl.$setValidity('editable', true);
 
