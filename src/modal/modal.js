@@ -62,7 +62,8 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
       restrict: 'EA',
       replace: true,
       templateUrl: 'template/modal/backdrop.html',
-      link: function (scope) {
+      link: function (scope, element, attrs) {
+        scope.backdropClass = attrs.backdropClass || '';
 
         scope.animate = false;
 
@@ -144,20 +145,33 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
       },
       replace: true,
       transclude: true,
-      templateUrl: 'template/modal/window.html',
+      templateUrl: function(tElement, tAttrs) {
+        return tAttrs.templateUrl || 'template/modal/window.html';
+      },
       link: function (scope, element, attrs) {
-        scope.windowClass = attrs.windowClass || '';
+        element.addClass(attrs.windowClass || '');
+        scope.size = attrs.size;
 
         $timeout(function () {
           // trigger CSS transitions
           scope.animate = true;
-          // focus a freshly-opened modal
-          element[0].focus();
+
+          /**
+           * Auto-focusing of a freshly-opened modal element causes any child elements
+           * with the autofocus attribute to loose focus. This is an issue on touch
+           * based devices which will show and then hide the onscreen keyboard.
+           * Attempts to refocus the autofocus element via JavaScript will not reopen
+           * the onscreen keyboard. Fixed by updated the focusing logic to only autofocus
+           * the modal element if the modal does not contain an autofocus element.
+           */
+          if (!element[0].querySelectorAll('[autofocus]').length) {
+            element[0].focus();
+          }
         });
 
         var attachedTo;
         if (attrs.attach) {
-          $modalAttach(element, { to: attrs.attach, placement: attrs.placement, index: scope.index })
+          $modalAttach(element, { to: attrs.attach, placement: attrs.placement, index: scope.index });
         }
 
         scope.close = function (evt) {
@@ -171,6 +185,17 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
       }
     };
   }])
+
+  .directive('modalTransclude', function () {
+    return {
+      link: function($scope, $element, $attrs, controller, $transclude) {
+        $transclude($scope.$parent, function(clone) {
+          $element.empty();
+          $element.append(clone);
+        });
+      }
+    };
+  })
 
   .factory('$modalStack', ['$transition', '$timeout', '$document', '$compile', '$rootScope', '$$stackedMap',
     function ($transition, $timeout, $document, $compile, $rootScope, $$stackedMap) {
@@ -207,8 +232,11 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
         openedWindows.remove(modalInstance);
 
         //remove window DOM element
-        removeAfterAnimate(modalWindow.modalDomEl, modalWindow.modalScope, 300, checkRemoveBackdrop);
-        body.toggleClass(OPENED_MODAL_CLASS, openedWindows.length() > 0);
+        removeAfterAnimate(modalWindow.modalDomEl, modalWindow.modalScope, 300, function() {
+          modalWindow.modalScope.$destroy();
+          body.toggleClass(OPENED_MODAL_CLASS, openedWindows.length() > 0);
+          checkRemoveBackdrop();
+        });
       }
 
       function checkRemoveBackdrop() {
@@ -240,7 +268,7 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
           });
         } else {
           // Ensure this call is async
-          $timeout(afterAnimating, 0);
+          $timeout(afterAnimating);
         }
 
         function afterAnimating() {
@@ -262,8 +290,9 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
         if (evt.which === 27) {
           modal = openedWindows.top();
           if (modal && modal.value.keyboard) {
+            evt.preventDefault();
             $rootScope.$apply(function () {
-              $modalStack.dismiss(modal.key);
+              $modalStack.dismiss(modal.key, 'escape key press');
             });
           }
         }
@@ -285,20 +314,26 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
         if (currBackdropIndex >= 0 && !backdropDomEl) {
           backdropScope = $rootScope.$new(true);
           backdropScope.index = currBackdropIndex;
-          backdropDomEl = $compile('<div modal-backdrop></div>')(backdropScope);
+          var angularBackgroundDomEl = angular.element('<div modal-backdrop></div>');
+          angularBackgroundDomEl.attr('backdrop-class', modal.backdropClass);
+          backdropDomEl = $compile(angularBackgroundDomEl)(backdropScope);
           body.append(backdropDomEl);
         }
 
         var angularDomEl = angular.element('<div modal-window></div>');
         if (modal.attach && modal.attach.selector) {
-          angularDomEl.attr('attach', modal.attach.selector);
-          angularDomEl.attr('placement', modal.attach.placement);
-          angularDomEl.addClass('modal-attached');
+          angularDomEl.attr({
+            'attach': modal.attach.selector,
+            'placement': modal.attach.placement
+          }).addClass('modal-attached');
         }
-        angularDomEl.attr('window-class', modal.windowClass);
-        angularDomEl.attr('index', openedWindows.length() - 1);
-        angularDomEl.attr('animate', 'animate');
-        angularDomEl.html(modal.content);
+        angularDomEl.attr({
+          'template-url': modal.windowTemplateUrl,
+          'window-class': modal.windowClass,
+          'size': modal.size,
+          'index': openedWindows.length() - 1,
+          'animate': 'animate'
+        }).html(modal.content);
 
         var modalDomEl = $compile(angularDomEl)(modal.scope);
         openedWindows.top().value.modalDomEl = modalDomEl;
@@ -307,17 +342,17 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
       };
 
       $modalStack.close = function (modalInstance, result) {
-        var modalWindow = openedWindows.get(modalInstance).value;
+        var modalWindow = openedWindows.get(modalInstance);
         if (modalWindow) {
-          modalWindow.deferred.resolve(result);
+          modalWindow.value.deferred.resolve(result);
           removeModalWindow(modalInstance);
         }
       };
 
       $modalStack.dismiss = function (modalInstance, reason) {
-        var modalWindow = openedWindows.get(modalInstance).value;
+        var modalWindow = openedWindows.get(modalInstance);
         if (modalWindow) {
-          modalWindow.deferred.reject(reason);
+          modalWindow.value.deferred.reject(reason);
           removeModalWindow(modalInstance);
         }
       };
@@ -351,14 +386,15 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
 
           function getTemplatePromise(options) {
             return options.template ? $q.when(options.template) :
-              $http.get(options.templateUrl, {cache: $templateCache}).then(function (result) {
-                return result.data;
+              $http.get(angular.isFunction(options.templateUrl) ? (options.templateUrl)() : options.templateUrl,
+                {cache: $templateCache}).then(function (result) {
+                  return result.data;
               });
           }
 
           function getResolvePromises(resolves) {
             var promisesArr = [];
-            angular.forEach(resolves, function (value, key) {
+            angular.forEach(resolves, function (value) {
               if (angular.isFunction(value) || angular.isArray(value)) {
                 promisesArr.push($q.when($injector.invoke(value)));
               }
@@ -414,6 +450,9 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
                 });
 
                 ctrlInstance = $controller(modalOptions.controller, ctrlLocals);
+                if (modalOptions.controller) {
+                  modalScope[modalOptions.controllerAs] = ctrlInstance;
+                }
               }
 
               $modalStack.open(modalInstance, {
@@ -422,8 +461,11 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
                 content: tplAndVars[0],
                 backdrop: modalOptions.backdrop,
                 keyboard: modalOptions.keyboard,
+                backdropClass: modalOptions.backdropClass,
                 windowClass: modalOptions.windowClass,
-                attach: modalOptions.attach
+                attach: modalOptions.attach,
+                windowTemplateUrl: modalOptions.windowTemplateUrl,
+                size: modalOptions.size
               });
 
             }, function resolveError(reason) {
