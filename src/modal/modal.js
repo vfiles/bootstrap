@@ -1,4 +1,4 @@
-angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
+angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.transition'])
 
 /**
  * A helper, internal data structure that acts as a map but also allows getting / removing
@@ -57,7 +57,7 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
 /**
  * A helper directive for the $modal service. It creates a backdrop element.
  */
-  .directive('modalBackdrop', ['$timeout', function ($timeout) {
+  .directive('modalBackdrop', ['$timeout', '$modalStack', function ($timeout, $modalStack) {
     return {
       restrict: 'EA',
       replace: true,
@@ -70,11 +70,72 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
         $timeout(function () {
           scope.animate = true;
         });
+
+        scope.close = function (evt) {
+          var modal = $modalStack.getTop();
+          if (modal && modal.value.backdrop && modal.value.backdrop != 'static' && (evt.target === evt.currentTarget)) {
+            evt.preventDefault();
+            evt.stopPropagation();
+            $modalStack.dismiss(modal.key, 'backdrop click');
+          }
+        };
       }
     };
   }])
+  .factory('$modalAttach', ['$position', function($position) {
+    var defaultOpts;
+    defaultOpts = {
+      to: null,
+      placement: 'top',
+      index: 1
+    };
+    return function(element, opts) {
+      opts = angular.extend({}, defaultOpts, opts);
 
-  .directive('modalWindow', ['$modalStack', '$timeout', function ($modalStack, $timeout) {
+      var attachedTo = angular.element(opts.to),
+          position = $position.offset(attachedTo),
+          modalWidth = element.prop('offsetWidth'),
+          modalHeight = element.prop('offsetHeight');
+          modalPosition = (function() {
+            switch (opts.placement) {
+              case 'right':
+                return {
+                  top: position.top + position.height / 2 - modalHeight / 2,
+                  left: position.left + position.width
+                };
+              case 'bottom':
+                return {
+                  top: position.top + position.height,
+                  left: position.left + position.width / 2 - modalWidth / 2
+                };
+              case 'left':
+                return {
+                  top: position.top + position.height / 2 - modalHeight / 2,
+                  left: position.left - modalWidth
+                };
+              default:
+                return {
+                  top: position.top - modalHeight,
+                  left: position.left + position.width / 2 - modalWidth / 2
+                };
+            }
+          })();
+
+      attachedTo.css({
+        'z-index': 1050 + opts.index * 10
+      });
+      element.on('$destroy', function() {
+        return attachedTo.css({
+          'z-index': ''
+        });
+      });
+      return element.css({
+        top: modalPosition.top + 'px',
+        left: modalPosition.left + 'px'
+      });
+    };
+  }])
+  .directive('modalWindow', ['$modalStack', '$timeout', '$position', '$modalAttach', function ($modalStack, $timeout, $position, $modalAttach) {
     return {
       restrict: 'EA',
       scope: {
@@ -93,6 +154,11 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
           // focus a freshly-opened modal
           element[0].focus();
         });
+
+        var attachedTo;
+        if (attrs.attach) {
+          $modalAttach(element, { to: attrs.attach, placement: attrs.placement, index: scope.index })
+        }
 
         scope.close = function (evt) {
           var modal = $modalStack.getTop();
@@ -209,7 +275,8 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
           deferred: modal.deferred,
           modalScope: modal.scope,
           backdrop: modal.backdrop,
-          keyboard: modal.keyboard
+          keyboard: modal.keyboard,
+          attach: modal.attach
         });
 
         var body = $document.find('body').eq(0),
@@ -221,8 +288,13 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
           backdropDomEl = $compile('<div modal-backdrop></div>')(backdropScope);
           body.append(backdropDomEl);
         }
-          
+
         var angularDomEl = angular.element('<div modal-window></div>');
+        if (modal.attach && modal.attach.selector) {
+          angularDomEl.attr('attach', modal.attach.selector);
+          angularDomEl.attr('placement', modal.attach.placement);
+          angularDomEl.addClass('modal-attached');
+        }
         angularDomEl.attr('window-class', modal.windowClass);
         angularDomEl.attr('index', openedWindows.length() - 1);
         angularDomEl.attr('animate', 'animate');
@@ -350,7 +422,8 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.transition'])
                 content: tplAndVars[0],
                 backdrop: modalOptions.backdrop,
                 keyboard: modalOptions.keyboard,
-                windowClass: modalOptions.windowClass
+                windowClass: modalOptions.windowClass,
+                attach: modalOptions.attach
               });
 
             }, function resolveError(reason) {
