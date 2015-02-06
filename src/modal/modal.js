@@ -152,13 +152,18 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
         element.addClass(attrs.windowClass || '');
         scope.size = attrs.size;
 
+        // moved from template to fix issue #2280
+        element.on('click', function(evt) {
+          scope.close(evt);
+        });
+
         $timeout(function () {
           // trigger CSS transitions
           scope.animate = true;
 
           /**
            * Auto-focusing of a freshly-opened modal element causes any child elements
-           * with the autofocus attribute to loose focus. This is an issue on touch
+           * with the autofocus attribute to lose focus. This is an issue on touch
            * based devices which will show and then hide the onscreen keyboard.
            * Attempts to refocus the autofocus element via JavaScript will not reopen
            * the onscreen keyboard. Fixed by updated the focusing logic to only autofocus
@@ -321,12 +326,14 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
         }
 
         var angularDomEl = angular.element('<div modal-window></div>');
+
         if (modal.attach && modal.attach.selector) {
           angularDomEl.attr({
             'attach': modal.attach.selector,
             'placement': modal.attach.placement
           }).addClass('modal-attached');
         }
+
         angularDomEl.attr({
           'template-url': modal.windowTemplateUrl,
           'window-class': modal.windowClass,
@@ -450,7 +457,8 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
                 });
 
                 ctrlInstance = $controller(modalOptions.controller, ctrlLocals);
-                if (modalOptions.controller) {
+
+                if (modalOptions.controllerAs) {
                   modalScope[modalOptions.controllerAs] = ctrlInstance;
                 }
               }
