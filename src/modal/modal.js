@@ -96,7 +96,7 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
       var attachedTo = angular.element(opts.to),
           position = $position.offset(attachedTo),
           modalWidth = element.prop('offsetWidth'),
-          modalHeight = element.prop('offsetHeight');
+          modalHeight = element.prop('offsetHeight'),
           modalPosition = (function() {
             switch (opts.placement) {
               case 'right':
