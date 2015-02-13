@@ -68,6 +68,8 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
       var tokenPattern = attrs.typeaheadTokenPattern ? new RegExp(attrs.typeaheadTokenPattern, 'g') : undefined;
 
+      var multipleSearches = attrs.typeaheadMultipleSearches ? originalScope.$eval(attrs.typeaheadMultipleSearches) : false;
+
       var focusFirst = originalScope.$eval(attrs.typeaheadFocusFirst) !== false;
 
       //INTERNAL VARIABLES
@@ -182,7 +184,12 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
         var locals = {$viewValue: inputValue}, currentToken;
         if (tokenPattern && (currentToken = getCurrentToken(inputValue))) {
-          locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
+          if (!multipleSearches) {
++           locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
++         } else {
++           //if multiple searches is set to true, pass the whole match array and deal with it later
++           locals.$tokenValue = currentToken;
++         }
         } else {
           locals.$tokenValue = '';
         }
@@ -193,7 +200,7 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
           //but we are interested only in responses that correspond to the current view value
           var onCurrentRequest = (inputValue === modelCtrl.$viewValue);
           if (onCurrentRequest && hasFocus) {
-            if (matches.length > 0) {
+            if (matches && matches.length > 0) {
 
               scope.activeIdx = focusFirst ? 0 : -1;
               scope.matches.length = 0;
