@@ -185,11 +185,11 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
         var locals = {$viewValue: inputValue}, currentToken;
         if (tokenPattern && (currentToken = getCurrentToken(inputValue))) {
           if (!multipleSearches) {
-+           locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
-+         } else {
-+           //if multiple searches is set to true, pass the whole match array and deal with it later
-+           locals.$tokenValue = currentToken;
-+         }
+            locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
+          } else {
+            //if multiple searches is set to true, pass the whole match array and deal with it later
+            locals.$tokenValue = currentToken;
+          }
         } else {
           locals.$tokenValue = '';
         }
