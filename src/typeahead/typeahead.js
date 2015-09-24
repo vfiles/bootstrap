@@ -70,6 +70,8 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
       var multipleSearches = attrs.typeaheadMultipleSearches ? originalScope.$eval(attrs.typeaheadMultipleSearches) : false;
 
+      var formatter = attrs.typeaheadFormatter ? originalScope.$eval(attrs.typeaheadFormatter) : undefined;
+
       var focusFirst = originalScope.$eval(attrs.typeaheadFocusFirst) !== false;
 
       //INTERNAL VARIABLES
@@ -122,7 +124,15 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
         }
 
         var currentToken = getCurrentToken(inputValue);
-        return inputValue.substr(0, currentToken.index).concat(currentToken[0].replace(currentToken[1], newToken)).concat(inputValue.substr(currentToken.index + currentToken[0].length));
+
+        var replacement;
+        if (tokenPattern.test(newToken)) {
+          replacement = newToken;
+        } else {
+          replacement = currentToken[0].replace(currentToken[1], newToken);
+        }
+
+        return inputValue.substr(0, currentToken.index).concat(replacement).concat(inputValue.substr(currentToken.index + currentToken[0].length));
       };
 
       //expressions used by typeahead
@@ -325,7 +335,13 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
         var model, item;
 
         locals[parserResult.itemName] = item = scope.matches[activeIdx].model;
-        model = parserResult.modelMapper(originalScope, locals);
+
+        if (formatter) {
+          model = formatter(item);
+        } else {
+          model = parserResult.modelMapper(originalScope, locals);
+        }
+
         if (tokenPattern) {
           model = setCurrentToken(modelCtrl.$viewValue, model);
         }
