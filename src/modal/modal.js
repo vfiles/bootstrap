@@ -217,7 +217,7 @@ angular.module('ui.bootstrap.modal', ['ui.bootstrap.position', 'ui.bootstrap.tra
     };
   }])
   .directive('modalWindow', [
-           '$modalStack', '$q', '$animate', '$injector', '$position', '$modalAttach'
+           '$modalStack', '$q', '$animate', '$injector', '$position', '$modalAttach',
   function($modalStack ,  $q ,  $animate,   $injector, $position, $modalAttach) {
     var $animateCss = null;
 
