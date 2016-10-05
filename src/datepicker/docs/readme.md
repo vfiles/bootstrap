@@ -28,6 +28,10 @@ All settings can be provided as attributes in the `datepicker` or globally confi
  * `date-disabled (date, mode)`
  	_(Default: null)_ :
  	An optional expression to disable visible options based on passing date and current mode _(day|month|year)_.
+ 	
+ * `custom-class (date, mode)`
+ 	_(Default: null)_ :
+ 	An optional expression to add classes based on passing date and current mode _(day|month|year)_. 	
 
  * `show-weeks`
  	_(Defaults: true)_ :
@@ -39,7 +43,7 @@ All settings can be provided as attributes in the `datepicker` or globally confi
 
  * `init-date`
  	:
- 	The initial date view when no model value is not specified.
+ 	The initial date view when no model value is specified.
 
  * `min-mode`
    _(Defaults: 'day')_ :
@@ -75,7 +79,15 @@ All settings can be provided as attributes in the `datepicker` or globally confi
 
  * `year-range`
  	_(Default: 20)_ :
- 	Number of years displayed in year selection.
+ 	Number of years displayed in year selection. 
+
+ * `shortcut-propagation`
+  _(Default: false)_ :
+  An option to disable or enable shortcut's event propagation.
+
+ * `template-url`
+  _(Default: 'template/datepicker/datepicker.html')_ :
+  Allows overriding of default template of the datepicker
 
 
 ### Popup Settings ###
@@ -107,13 +119,29 @@ Specific settings for the `datepicker-popup`, that can globally configured throu
  	_(Default: true)_ :
  	Whether to close calendar when a date is chosen.
 
+ * `datepicker-popup-template-url`
+  _(Default: 'template/datepicker/popup.html')_ :
+  Allows overriding of default template of the popup
+
+ * `datepicker-template-url`
+  _(Default: 'template/datepicker/datepicker.html')_ :
+  Allows overriding of default template of the datepicker used in popup
+
  * `datepicker-append-to-body`
   _(Default: false)_:
   Append the datepicker popup element to `body`, rather than inserting after `datepicker-popup`. For global configuration, use `datepickerPopupConfig.appendToBody`.
 
+ * `is-open` <i class="glyphicon glyphicon-eye-open"></i>
+  _(Default: false)_:
+  Whether to show the datepicker.
+
+ * `on-open-focus`
+  _(Default: true)_:
+  Whether to focus the datepicker popup upon opening.
+
 ### Keyboard Support ###
 
-Depending on datepicker's current mode, the date may reffer either to day, month or year. Accordingly, the term view reffers either to a month, year or year range.
+Depending on datepicker's current mode, the date may refer either to day, month or year. Accordingly, the term view refers either to a month, year or year range.
 
  * `Left`: Move focus to the previous date. Will move to the last date of the previous view, if the current date is the first date of a view.
  * `Right`: Move focus to the next date. Will move to the first date of the following view, if the current date is the last date of a view.
