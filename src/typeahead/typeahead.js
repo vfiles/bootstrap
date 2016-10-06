@@ -72,10 +72,16 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.debounce', 'ui.bootstrap
 
     var inputFormatter = attrs.typeaheadInputFormatter ? $parse(attrs.typeaheadInputFormatter) : undefined;
 
+    var formatter = attrs.typeaheadFormatter ? originalScope.$eval(attrs.typeaheadFormatter) : undefined;
+
     var appendToBody = attrs.typeaheadAppendToBody ? originalScope.$eval(attrs.typeaheadAppendToBody) : false;
 
     var appendTo = attrs.typeaheadAppendTo ?
       originalScope.$eval(attrs.typeaheadAppendTo) : null;
+
+    var tokenPattern = attrs.typeaheadTokenPattern ? new RegExp(attrs.typeaheadTokenPattern, "g") : undefined;
+
+    var multipleSearches = attrs.typeaheadMultipleSearches ? originalScope.$eval(attrs.typeaheadMultipleSearches) : false;
 
     var focusFirst = originalScope.$eval(attrs.typeaheadFocusFirst) !== false;
 
@@ -88,6 +94,60 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.debounce', 'ui.bootstrap
     var showHint = originalScope.$eval(attrs.typeaheadShowHint) || false;
 
     //INTERNAL VARIABLES
+
+    //tokenizer stuff for multi-select
+    var getTokens = function(str) {
+      var matches = [];
+      var match;
+      while (match = tokenPattern.exec(str)) {
+        matches.push(match);
+      }
+      return matches;
+    }
+    var getCursorPosition = function(elem) {
+      var el = elem.get(0);
+      var pos = 0;
+      if('selectionStart' in el) {
+        pos = el.selectionStart;
+      } else if('selection' in document) {
+        el.focus();
+        var Sel = document.selection.createRange();
+        var SelLength = document.selection.createRange().text.length;
+        Sel.moveStart('character', -el.value.length);
+        pos = Sel.text.length - SelLength;
+      }
+      return pos;
+    }
+    var getCurrentToken = function(inputValue) {
+      if (!tokenPattern) return;
+
+      var cursorIdx = getCursorPosition(element);
+      var matches = getTokens(inputValue);
+      for (var i = 0; i < matches.length; i++) {
+        var match = matches[i];
+        if (match.index <= cursorIdx && match.index + match[0].length >= cursorIdx) {
+          return match;
+        } else if (match.index > cursorIdx) {
+          return;
+        }
+      }
+    }
+    var setCurrentToken = function(inputValue, newToken) {
+      if (!tokenPattern) return;
+
+      var currentToken = getCurrentToken(inputValue)
+
+      var replacement;
+
+      if (tokenPattern.test(newToken)) {
+        replacement = newToken;
+      } else {
+        replacement = currentToken[0].replace(currentToken[1], newToken);
+      }
+
+      return inputValue.substr(0, currentToken.index).concat(replacement).concat(inputValue.substr(currentToken.index + currentToken[0].length));
+    }
+
 
     //model setter executed upon match selection
     var parsedModel = $parse(attrs.ngModel);
@@ -218,7 +278,18 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.debounce', 'ui.bootstrap
     };
 
     var getMatchesAsync = function(inputValue, evt) {
-      var locals = {$viewValue: inputValue};
+      var locals = {$viewValue: inputValue}, currentToken;
+      if (tokenPattern && (currentToken = getCurrentToken(inputValue))) {
+        if (!multipleSearches) {
+          locals.$tokenValue = currentToken.length > 0 ? currentToken[1] : currentToken[0];
+        } else {
+          //if multiple searches is set to true, pass the whole match array and deal with it later
+          locals.$tokenValue = currentToken;
+        }
+      } else {
+        locals.$tokenValue = '';
+      }
+
       isLoadingSetter(originalScope, true);
       isNoResultsSetter(originalScope, false);
       $q.when(parserResult.source(originalScope, locals)).then(function(matches) {
@@ -352,7 +423,14 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.debounce', 'ui.bootstrap
 
       selected = true;
       locals[parserResult.itemName] = item = scope.matches[activeIdx].model;
-      model = parserResult.modelMapper(originalScope, locals);
+      if (formatter) {
+        model = formatter(item);
+      } else {
+        model = parserResult.modelMapper(originalScope, locals);
+      }
+      if (tokenPattern) {
+        model = setCurrentToken(modelCtrl.$viewValue, model);
+      }
       $setModelValue(originalScope, model);
       modelCtrl.$setValidity('editable', true);
       modelCtrl.$setValidity('parse', true);
